@@ -17,7 +17,7 @@ export class HueKnewStack extends Stack {
     });
 
     const createGameFn = new lambda.Function(this, 'CreateGameFunction', {
-      runtime: lambda.Runtime.NODEJS_18_X,
+      runtime: lambda.Runtime.NODEJS_20_X,
       handler: 'index.handler',
       code: lambda.Code.fromAsset('lambdas/create-game', {
         exclude: ['cdk.out', '**/*.ts', '**/*.map', 'test', '.git']
