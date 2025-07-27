@@ -1,11 +1,14 @@
 import { APIGatewayProxyHandler } from "aws-lambda";
 import { v4 as uuidv4 } from "uuid";
 import { DynamoDBClient, PutItemCommand } from "@aws-sdk/client-dynamodb";
+import { randomBytes } from "crypto";
+
 
 const client = new DynamoDBClient({});
 
 export const handler: APIGatewayProxyHandler = async () => {
-  const gameId = uuidv4();
+  const gameId = randomBytes(4).toString("hex");
+
   const targetX = Math.floor(Math.random() * 50);
   const targetY = Math.floor(Math.random() * 20);
 
