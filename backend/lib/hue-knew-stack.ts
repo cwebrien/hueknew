@@ -1,45 +1,67 @@
-import { Stack, StackProps } from 'aws-cdk-lib';
-import { RemovalPolicy } from 'aws-cdk-lib';
+import { Stack, StackProps, RemovalPolicy } from 'aws-cdk-lib';
 import { Construct } from 'constructs';
 import * as dynamodb from 'aws-cdk-lib/aws-dynamodb';
 import * as lambda from 'aws-cdk-lib/aws-lambda';
 import * as apigw from 'aws-cdk-lib/aws-apigateway';
-import * as iam from 'aws-cdk-lib/aws-iam'; 
+import * as iam from 'aws-cdk-lib/aws-iam';
 
 export class HueKnewStack extends Stack {
   constructor(scope: Construct, id: string, props?: StackProps) {
     super(scope, id, props);
 
+    // DynamoDB Table
     const gameTable = new dynamodb.Table(this, 'HueKnewGames', {
       partitionKey: { name: 'gameId', type: dynamodb.AttributeType.STRING },
       billingMode: dynamodb.BillingMode.PAY_PER_REQUEST,
-      removalPolicy: RemovalPolicy.DESTROY // ❗ for dev only — change to RETAIN in prod
+      removalPolicy: RemovalPolicy.DESTROY, // For dev only
     });
 
+    // Create Game Lambda
     const createGameFn = new lambda.Function(this, 'CreateGameFunction', {
       runtime: lambda.Runtime.NODEJS_20_X,
       handler: 'index.handler',
       code: lambda.Code.fromAsset('lambdas/create-game', {
-        exclude: ['cdk.out', '**/*.ts', '**/*.map', 'test', '.git']
+        exclude: ['cdk.out', '**/*.ts', '**/*.map', 'test', '.git'],
       }),
       environment: {
-        GAME_TABLE_NAME: gameTable.tableName
-      }
+        GAME_TABLE_NAME: gameTable.tableName,
+      },
     });
 
     gameTable.grantWriteData(createGameFn);
-
-
     createGameFn.role?.addManagedPolicy(
       iam.ManagedPolicy.fromAwsManagedPolicyName('service-role/AWSLambdaBasicExecutionRole')
     );
 
-    new apigw.LambdaRestApi(this, 'HueKnewApi', {
-      handler: createGameFn,
+    // Submit Clue Lambda
+    const submitClueFn = new lambda.Function(this, 'SubmitClueFunction', {
+      runtime: lambda.Runtime.NODEJS_20_X,
+      handler: 'index.handler',
+      code: lambda.Code.fromAsset('lambdas/submit-clue', {
+        exclude: ['cdk.out', '**/*.ts', '**/*.map', 'test', '.git'],
+      }),
+      environment: {
+        GAME_TABLE_NAME: gameTable.tableName,
+      },
+    });
+
+    gameTable.grantReadWriteData(submitClueFn);
+    submitClueFn.role?.addManagedPolicy(
+      iam.ManagedPolicy.fromAwsManagedPolicyName('service-role/AWSLambdaBasicExecutionRole')
+    );
+
+    // API Gateway Setup
+    const api = new apigw.RestApi(this, 'HueKnewApi', {
       defaultCorsPreflightOptions: {
         allowOrigins: apigw.Cors.ALL_ORIGINS,
         allowMethods: apigw.Cors.ALL_METHODS,
       },
     });
+
+    const gameResource = api.root.addResource('game');
+    gameResource.addMethod('POST', new apigw.LambdaIntegration(createGameFn));
+
+    const gameIdResource = gameResource.addResource('{gameId}');
+    gameIdResource.addResource('leader').addMethod('POST', new apigw.LambdaIntegration(submitClueFn));
   }
 }
