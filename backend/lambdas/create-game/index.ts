@@ -22,7 +22,8 @@ export const handler: APIGatewayProxyHandler = async () => {
       gameId: { S: gameId },
       targetX: { N: targetX.toString() },
       targetY: { N: targetY.toString() },
-      phase: { S: "waiting_for_clue" }
+      phase: { S: "waiting_for_clue" },
+      players: { M: {} }
     }
   });
 

@@ -50,6 +50,23 @@ export class HueKnewStack extends Stack {
       iam.ManagedPolicy.fromAwsManagedPolicyName('service-role/AWSLambdaBasicExecutionRole')
     );
 
+    // Player Join Lambda
+    const joinGameFn = new lambda.Function(this, 'JoinGameFunction', {
+      runtime: lambda.Runtime.NODEJS_20_X,
+      handler: 'index.handler',
+      code: lambda.Code.fromAsset('lambdas/join-game', {
+        exclude: ['cdk.out', '**/*.ts', '**/*.map', 'test', '.git']
+      }),
+      environment: {
+        GAME_TABLE_NAME: gameTable.tableName
+      }
+    });
+
+    gameTable.grantReadWriteData(joinGameFn);
+    joinGameFn.role?.addManagedPolicy(
+      iam.ManagedPolicy.fromAwsManagedPolicyName('service-role/AWSLambdaBasicExecutionRole')
+    );
+
     // API Gateway Setup
     const api = new apigw.RestApi(this, 'HueKnewApi', {
       defaultCorsPreflightOptions: {
@@ -63,5 +80,6 @@ export class HueKnewStack extends Stack {
 
     const gameIdResource = gameResource.addResource('{gameId}');
     gameIdResource.addResource('leader').addMethod('POST', new apigw.LambdaIntegration(submitClueFn));
+    gameIdResource.addResource('join').addMethod('POST', new apigw.LambdaIntegration(joinGameFn));
   }
 }
