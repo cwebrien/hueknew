@@ -84,6 +84,28 @@ export class HueKnewStack extends Stack {
       iam.ManagedPolicy.fromAwsManagedPolicyName('service-role/AWSLambdaBasicExecutionRole')
     );
 
+    // Submitting first guess
+    const submitGuessFn = new lambda.Function(this, 'SubmitGuessFunction', {
+      runtime: lambda.Runtime.NODEJS_20_X,
+      handler: 'index.handler',
+      code: lambda.Code.fromAsset('lambdas/submit-guess', {
+        exclude: ['cdk.out', '**/*.ts', '**/*.map', 'test', '.git'],
+      }),
+      environment: { GAME_TABLE_NAME: gameTable.tableName }
+    });
+    gameTable.grantReadWriteData(submitGuessFn);
+
+    // Submitting second guess
+    const submitGuess2Fn = new lambda.Function(this, 'SubmitGuess2Function', {
+      runtime: lambda.Runtime.NODEJS_20_X,
+      handler: 'index.handler',
+      code: lambda.Code.fromAsset('lambdas/submit-guess2', {
+        exclude: ['cdk.out', '**/*.ts', '**/*.map', 'test', '.git'],
+      }),
+      environment: { GAME_TABLE_NAME: gameTable.tableName }
+    });
+    gameTable.grantReadWriteData(submitGuess2Fn);
+
     // API Gateway Setup
     const api = new apigw.RestApi(this, 'HueKnewApi', {
       defaultCorsPreflightOptions: {
@@ -98,7 +120,8 @@ export class HueKnewStack extends Stack {
     const gameIdResource = gameResource.addResource('{gameId}');
     gameIdResource.addResource('leader').addMethod('POST', new apigw.LambdaIntegration(submitClueFn));
     gameIdResource.addResource('join').addMethod('POST', new apigw.LambdaIntegration(joinGameFn));
-    gameIdResource.addResource('state').addMethod('GET', new apigw.LambdaIntegration(getGameStateFn)
-);
+    gameIdResource.addResource('state').addMethod('GET', new apigw.LambdaIntegration(getGameStateFn));
+    gameIdResource.addResource('guess').addMethod('POST', new apigw.LambdaIntegration(submitGuessFn));
+    gameIdResource.addResource('guess2').addMethod('POST', new apigw.LambdaIntegration(submitGuess2Fn));
   }
 }
