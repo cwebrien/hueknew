@@ -67,6 +67,23 @@ export class HueKnewStack extends Stack {
       iam.ManagedPolicy.fromAwsManagedPolicyName('service-role/AWSLambdaBasicExecutionRole')
     );
 
+    // Get Game State Lambda
+    const getGameStateFn = new lambda.Function(this, 'GetGameStateFunction', {
+      runtime: lambda.Runtime.NODEJS_20_X,
+      handler: 'index.handler',
+      code: lambda.Code.fromAsset('lambdas/get-game-state', {
+        exclude: ['cdk.out', '**/*.ts', '**/*.map', 'test', '.git'],
+      }),
+      environment: {
+        GAME_TABLE_NAME: gameTable.tableName,
+      },
+    });
+
+    gameTable.grantReadData(getGameStateFn);
+    getGameStateFn.role?.addManagedPolicy(
+      iam.ManagedPolicy.fromAwsManagedPolicyName('service-role/AWSLambdaBasicExecutionRole')
+    );
+
     // API Gateway Setup
     const api = new apigw.RestApi(this, 'HueKnewApi', {
       defaultCorsPreflightOptions: {
@@ -81,5 +98,7 @@ export class HueKnewStack extends Stack {
     const gameIdResource = gameResource.addResource('{gameId}');
     gameIdResource.addResource('leader').addMethod('POST', new apigw.LambdaIntegration(submitClueFn));
     gameIdResource.addResource('join').addMethod('POST', new apigw.LambdaIntegration(joinGameFn));
+    gameIdResource.addResource('state').addMethod('GET', new apigw.LambdaIntegration(getGameStateFn)
+);
   }
 }
