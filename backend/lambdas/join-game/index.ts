@@ -37,11 +37,6 @@ export const handler: APIGatewayProxyHandler = async (event) => {
         },
     });
 
-    console.log("JOIN LAMBDA INVOKED");
-    console.log("Player ID:", playerId);
-    console.log("Command:", JSON.stringify(command));    
-
-
     try {
         await client.send(command);
         console.log(`✅ Added player ${body.name} with ID ${playerId} to game ${gameId}`);
