@@ -1,6 +1,6 @@
 import { APIGatewayProxyHandler } from "aws-lambda";
 import { DynamoDBClient, GetItemCommand, UpdateItemCommand } from "@aws-sdk/client-dynamodb";
-import { randomInt } from "crypto"; // ✅ import for new target square
+import { randomInt } from "crypto";
 
 const client = new DynamoDBClient({});
 const tableName = process.env.GAME_TABLE_NAME;
@@ -65,41 +65,49 @@ export const handler: APIGatewayProxyHandler = async (event) => {
         const nextLeaderIndex = (leaderIndex + 1) % playerIds.length;
         const nextLeaderId = playerIds[nextLeaderIndex];
 
-        // Generate new target square for next round
         const newTargetX = randomInt(0, 50);
         const newTargetY = randomInt(0, 20);
 
-        const updateExpressions = [
-            "SET phase = :phase",
+        const setExpressions: string[] = [
+            "phase = :phase",
             "leaderId = :nextLeaderId",
             "leaderIndex = :nextLeaderIndex",
             "targetX = :targetX",
             "targetY = :targetY"
         ];
+        const removeExpressions: string[] = [];
+
         const attributeValues: any = {
             ":phase": { S: "waiting_for_clue" },
             ":nextLeaderId": { S: nextLeaderId },
             ":nextLeaderIndex": { N: nextLeaderIndex.toString() },
-            ":targetX": { N: newTargetX.toString() }, // target for next round
+            ":targetX": { N: newTargetX.toString() },
             ":targetY": { N: newTargetY.toString() }
         };
 
-        // Update player scores and clear out stale guesses
         for (const [pid, newScore] of Object.entries(updatedScores)) {
-            updateExpressions.push(`players.#${pid}.score = :score_${pid}`);
-            updateExpressions.push(`REMOVE players.#${pid}.guess1`);
-            updateExpressions.push(`REMOVE players.#${pid}.guess2`)
+            setExpressions.push(`players.#${pid}.score = :score_${pid}`);
             attributeValues[`:score_${pid}`] = { N: newScore.toString() };
+
+            removeExpressions.push(`players.#${pid}.guess1`);
+            removeExpressions.push(`players.#${pid}.guess2`);
         }
 
         const expressionNames = Object.fromEntries(
-            Object.keys(updatedScores).map(pid => [`#${pid}`, pid])
+            Object.keys(players).map(pid => [`#${pid}`, pid])
         );
+
+        // Perform updates and remove stale guesses
+        const updateParts = [`SET ${setExpressions.join(", ")}`];
+        if (removeExpressions.length > 0) {
+            updateParts.push(`REMOVE ${removeExpressions.join(", ")}`);
+        }
+        const updateExpression = updateParts.join(" ");
 
         await client.send(new UpdateItemCommand({
             TableName: tableName,
             Key: { gameId: { S: gameId } },
-            UpdateExpression: updateExpressions.join(", "),
+            UpdateExpression: updateExpression,
             ExpressionAttributeNames: expressionNames,
             ExpressionAttributeValues: attributeValues
         }));
