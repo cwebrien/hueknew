@@ -1,5 +1,6 @@
 import { APIGatewayProxyHandler } from "aws-lambda";
 import { DynamoDBClient, GetItemCommand, UpdateItemCommand } from "@aws-sdk/client-dynamodb";
+import { randomInt } from "crypto"; // ✅ import for new target square
 
 const client = new DynamoDBClient({});
 const tableName = process.env.GAME_TABLE_NAME;
@@ -22,7 +23,6 @@ export const handler: APIGatewayProxyHandler = async (event) => {
     }
 
     try {
-        // Step 1: Fetch the game
         const result = await client.send(new GetItemCommand({
             TableName: tableName,
             Key: { gameId: { S: gameId } }
@@ -58,29 +58,37 @@ export const handler: APIGatewayProxyHandler = async (event) => {
             totalPoints += score;
         }
 
-        // Update leader score
         const currentLeaderScore = parseInt(players[leaderId].M!.score.N!);
         updatedScores[leaderId] = currentLeaderScore + totalPoints;
 
-        // Determine next leader
         const playerIds = Object.keys(players);
         const nextLeaderIndex = (leaderIndex + 1) % playerIds.length;
         const nextLeaderId = playerIds[nextLeaderIndex];
 
-        // Step 2: Write back updates
+        // Generate new target square for next round
+        const newTargetX = randomInt(0, 50);
+        const newTargetY = randomInt(0, 20);
+
         const updateExpressions = [
             "SET phase = :phase",
             "leaderId = :nextLeaderId",
-            "leaderIndex = :nextLeaderIndex"
+            "leaderIndex = :nextLeaderIndex",
+            "targetX = :targetX",
+            "targetY = :targetY"
         ];
         const attributeValues: any = {
             ":phase": { S: "waiting_for_clue" },
             ":nextLeaderId": { S: nextLeaderId },
-            ":nextLeaderIndex": { N: nextLeaderIndex.toString() }
+            ":nextLeaderIndex": { N: nextLeaderIndex.toString() },
+            ":targetX": { N: newTargetX.toString() }, // target for next round
+            ":targetY": { N: newTargetY.toString() }
         };
 
+        // Update player scores and clear out stale guesses
         for (const [pid, newScore] of Object.entries(updatedScores)) {
             updateExpressions.push(`players.#${pid}.score = :score_${pid}`);
+            updateExpressions.push(`REMOVE players.#${pid}.guess1`);
+            updateExpressions.push(`REMOVE players.#${pid}.guess2`)
             attributeValues[`:score_${pid}`] = { N: newScore.toString() };
         }
 
@@ -102,7 +110,8 @@ export const handler: APIGatewayProxyHandler = async (event) => {
             body: JSON.stringify({
                 message: "Round scored",
                 totalPoints,
-                newLeaderId: nextLeaderId
+                newLeaderId: nextLeaderId,
+                newTargetSquare: { x: newTargetX, y: newTargetY }
             })
         };
     } catch (err) {

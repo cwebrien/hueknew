@@ -1,13 +1,12 @@
 import { APIGatewayProxyHandler } from "aws-lambda";
-import { v4 as uuidv4 } from "uuid";
 import { DynamoDBClient, PutItemCommand } from "@aws-sdk/client-dynamodb";
 import { randomBytes } from "crypto";
-
 
 const client = new DynamoDBClient({});
 
 export const handler: APIGatewayProxyHandler = async () => {
   const gameId = randomBytes(4).toString("hex");
+  const leaderId = randomBytes(4).toString("hex");
 
   const targetX = Math.floor(Math.random() * 50);
   const targetY = Math.floor(Math.random() * 20);
@@ -23,7 +22,18 @@ export const handler: APIGatewayProxyHandler = async () => {
       targetX: { N: targetX.toString() },
       targetY: { N: targetY.toString() },
       phase: { S: "waiting_for_clue" },
-      players: { M: {} }
+      leaderId: { S: leaderId },
+      leaderIndex: { N: "0" },
+      players: {
+        M: {
+          [leaderId]: {
+            M: {
+              name: { S: "Leader" },   // You can later prompt for this
+              score: { N: "0" }
+            }
+          }
+        }
+      }
     }
   });
 
@@ -39,6 +49,7 @@ export const handler: APIGatewayProxyHandler = async () => {
     headers: { "Access-Control-Allow-Origin": "*" },
     body: JSON.stringify({
       gameId,
+      leaderId,
       targetSquare: { x: targetX, y: targetY }
     })
   };

@@ -106,6 +106,19 @@ export class HueKnewStack extends Stack {
     });
     gameTable.grantReadWriteData(submitGuess2Fn);
 
+    // Score Round lambda
+    const scoreRoundFn = new lambda.Function(this, 'ScoreRoundFunction', {
+      runtime: lambda.Runtime.NODEJS_20_X,
+      handler: 'index.handler',
+      code: lambda.Code.fromAsset('lambdas/score-round', {
+        exclude: ['cdk.out', '**/*.ts', '**/*.map', 'test', '.git']
+      }),
+      environment: {
+        GAME_TABLE_NAME: gameTable.tableName
+      }
+    });
+    gameTable.grantReadWriteData(scoreRoundFn);
+    
     // API Gateway Setup
     const api = new apigw.RestApi(this, 'HueKnewApi', {
       defaultCorsPreflightOptions: {
@@ -123,5 +136,6 @@ export class HueKnewStack extends Stack {
     gameIdResource.addResource('state').addMethod('GET', new apigw.LambdaIntegration(getGameStateFn));
     gameIdResource.addResource('guess').addMethod('POST', new apigw.LambdaIntegration(submitGuessFn));
     gameIdResource.addResource('guess2').addMethod('POST', new apigw.LambdaIntegration(submitGuess2Fn));
+    gameIdResource.addResource('score').addMethod('POST', new apigw.LambdaIntegration(scoreRoundFn));
   }
 }
