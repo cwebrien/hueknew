@@ -77,6 +77,7 @@ export const handler: APIGatewayProxyHandler = async (event) => {
         ];
         const removeExpressions: string[] = [];
 
+        // Update state by moving to next leader and next round
         const attributeValues: any = {
             ":phase": { S: "waiting_for_clue" },
             ":nextLeaderId": { S: nextLeaderId },
@@ -85,6 +86,7 @@ export const handler: APIGatewayProxyHandler = async (event) => {
             ":targetY": { N: newTargetY.toString() }
         };
 
+        // Update score and remove stale guesses
         for (const [pid, newScore] of Object.entries(updatedScores)) {
             setExpressions.push(`players.#${pid}.score = :score_${pid}`);
             attributeValues[`:score_${pid}`] = { N: newScore.toString() };
@@ -93,11 +95,14 @@ export const handler: APIGatewayProxyHandler = async (event) => {
             removeExpressions.push(`players.#${pid}.guess2`);
         }
 
+        // Remove stale hints
+        removeExpressions.push("hint1");
+        removeExpressions.push("hint2");
+
         const expressionNames = Object.fromEntries(
             Object.keys(players).map(pid => [`#${pid}`, pid])
         );
 
-        // Perform updates and remove stale guesses
         const updateParts = [`SET ${setExpressions.join(", ")}`];
         if (removeExpressions.length > 0) {
             updateParts.push(`REMOVE ${removeExpressions.join(", ")}`);
